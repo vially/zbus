@@ -5,7 +5,7 @@
 //! Run with command: `cargo run --example watch-systemd-jobs`
 
 use futures_util::stream::StreamExt;
-use zbus::Connection;
+use zbus::conn::Builder;
 use zbus_macros::proxy;
 use zvariant::OwnedObjectPath;
 
@@ -26,7 +26,10 @@ trait Systemd1Manager {
 
 // NOTE: When changing this, please also keep `book/src/client.md` in sync.
 async fn watch_systemd_jobs() -> zbus::Result<()> {
-    let connection = Connection::system().await?;
+    let addr = "unixexec:path=systemd-stdio-bridge";
+    // Alternatively, connect to a remote D-Bus session over SSH with:
+    //let addr = "unixexec:path=ssh,argv1=-xT,argv2=--,argv3=REPLACE_ME_WITH_HOSTNAME,argv4=systemd-stdio-bridge";
+    let connection = Builder::address(addr)?.build().await?;
     // `Systemd1ManagerProxy` is generated from `Systemd1Manager` trait
     let systemd_proxy = Systemd1ManagerProxy::new(&connection).await?;
     // Method `receive_job_new` is generated from `job_new` signal
