@@ -11,7 +11,7 @@
 
 pub mod transport;
 
-use crate::{Error, Guid, OwnedGuid, Result};
+use crate::{Error, Executor, Guid, OwnedGuid, Result};
 #[cfg(all(unix, not(target_os = "macos")))]
 use nix::unistd::Uid;
 use std::{collections::HashMap, env, str::FromStr};
@@ -55,8 +55,8 @@ impl Address {
     }
 
     #[cfg_attr(any(target_os = "macos", windows), async_recursion::async_recursion)]
-    pub(crate) async fn connect(self) -> Result<Stream> {
-        self.transport.connect().await
+    pub(crate) async fn connect(self, executor: &Executor<'static>) -> Result<Stream> {
+        self.transport.connect(executor).await
     }
 
     /// Get the address for the session socket respecting the `DBUS_SESSION_BUS_ADDRESS` environment
@@ -186,7 +186,7 @@ mod tests {
     use crate::address::transport::{Autolaunch, AutolaunchScope};
     use crate::{
         address::transport::{Unix, UnixSocket},
-        Error,
+        Error, Executor,
     };
     use std::str::FromStr;
     use test_log::test;
@@ -414,10 +414,11 @@ mod tests {
 
     #[test]
     fn connect_tcp() {
+        let executor = Executor::new();
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         let addr = Address::from_str(&format!("tcp:host=localhost,port={port}")).unwrap();
-        crate::utils::block_on(async { addr.connect().await }).unwrap();
+        crate::utils::block_on(async { addr.connect(&executor).await }).unwrap();
     }
 
     #[test]
@@ -463,7 +464,8 @@ mod tests {
             sender.send(buf == TEST_COOKIE).unwrap();
         });
 
-        crate::utils::block_on(addr.connect()).unwrap();
+        let executor = Executor::new();
+        crate::utils::block_on(addr.connect(&executor)).unwrap();
 
         let saw_cookie = receiver
             .recv_timeout(std::time::Duration::from_millis(100))

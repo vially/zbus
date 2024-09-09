@@ -397,7 +397,7 @@ impl<'a> Builder<'a> {
         let unique_name = self.unique_name.take().map(Into::into);
 
         #[allow(unused_mut)]
-        let (mut stream, server_guid, authenticated) = self.target_connect().await?;
+        let (mut stream, server_guid, authenticated) = self.target_connect(&executor).await?;
         let mut auth = if authenticated {
             let (socket_read, socket_write) = stream.take();
             Authenticated {
@@ -514,7 +514,10 @@ impl<'a> Builder<'a> {
         }
     }
 
-    async fn target_connect(&mut self) -> Result<(BoxedSplit, Option<OwnedGuid>, bool)> {
+    async fn target_connect(
+        &mut self,
+        executor: &Executor<'static>,
+    ) -> Result<(BoxedSplit, Option<OwnedGuid>, bool)> {
         let mut authenticated = false;
         let mut guid = None;
         // SAFETY: `self.target` is always `Some` from the beginning and this method is only called
@@ -534,7 +537,7 @@ impl<'a> Builder<'a> {
             Target::VsockStream(stream) => stream.into(),
             Target::Address(address) => {
                 guid = address.guid().map(|g| g.to_owned().into());
-                match address.connect().await? {
+                match address.connect(executor).await? {
                     #[cfg(any(unix, not(feature = "tokio")))]
                     address::transport::Stream::Unix(stream) => stream.into(),
                     address::transport::Stream::Tcp(stream) => stream.into(),

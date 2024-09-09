@@ -4,7 +4,7 @@
 
 #[cfg(windows)]
 use crate::win32::autolaunch_bus_address;
-use crate::{Error, Result};
+use crate::{Error, Executor, Result};
 #[cfg(not(feature = "tokio"))]
 use async_io::Async;
 use std::collections::HashMap;
@@ -81,7 +81,10 @@ pub enum Transport {
 
 impl Transport {
     #[cfg_attr(any(target_os = "macos", windows), async_recursion::async_recursion)]
-    pub(super) async fn connect(self) -> Result<Stream> {
+    pub(super) async fn connect(
+        self,
+        #[allow(unused_variables)] executor: &Executor<'static>,
+    ) -> Result<Stream> {
         match self {
             Transport::Unix(unix) => {
                 // This is a `path` in case of Windows until uds_windows provides the needed API:
@@ -202,7 +205,7 @@ impl Transport {
             #[cfg(target_os = "macos")]
             Transport::Launchd(launchd) => {
                 let addr = launchd.bus_address().await?;
-                addr.connect().await
+                addr.connect(executor).await
             }
         }
     }
