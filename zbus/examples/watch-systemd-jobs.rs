@@ -9,8 +9,11 @@ use zbus::conn::Builder;
 use zbus_macros::proxy;
 use zvariant::OwnedObjectPath;
 
-fn main() {
-    async_io::block_on(watch_systemd_jobs()).expect("Error listening to signal");
+#[tokio::main]
+async fn main() {
+    watch_systemd_jobs()
+        .await
+        .expect("Error listening to signal");
 }
 
 #[proxy(
