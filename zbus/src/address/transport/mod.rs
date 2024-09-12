@@ -2,6 +2,8 @@
 //!
 //! This module provides the transport information for D-Bus addresses.
 
+#[cfg(unix)]
+use crate::connection::socket::Command;
 #[cfg(windows)]
 use crate::win32::autolaunch_bus_address;
 use crate::{Error, Result};
@@ -52,6 +54,10 @@ use std::os::linux::net::SocketAddrExt;
     feature = "tokio-vsock"
 ))]
 pub use vsock_transport::Vsock;
+#[cfg(unix)]
+mod unixexec;
+#[cfg(unix)]
+pub use unixexec::UnixExec;
 
 /// The transport properties of a D-Bus address.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -77,6 +83,9 @@ pub enum Transport {
     /// The type of `stream` is `vsock::VsockStream` with the `vsock` feature and
     /// `tokio_vsock::VsockStream` with the `tokio-vsock` feature.
     Vsock(Vsock),
+    /// A `unixexec` address.
+    #[cfg(unix)]
+    UnixExec(UnixExec),
 }
 
 impl Transport {
@@ -136,6 +145,8 @@ impl Transport {
                     }
                 }
             }
+            #[cfg(unix)]
+            Transport::UnixExec(unixexec) => unixexec.connect().await.map(Stream::UnixExec),
             #[cfg(all(feature = "vsock", not(feature = "tokio")))]
             Transport::Vsock(addr) => {
                 let stream = VsockStream::connect_with_cid_port(addr.cid(), addr.port())?;
@@ -211,6 +222,8 @@ impl Transport {
     pub(super) fn from_options(transport: &str, options: HashMap<&str, &str>) -> Result<Self> {
         match transport {
             "unix" => Unix::from_options(options).map(Self::Unix),
+            #[cfg(unix)]
+            "unixexec" => UnixExec::from_options(options).map(Self::UnixExec),
             "tcp" => Tcp::from_options(options, false).map(Self::Tcp),
             "nonce-tcp" => Tcp::from_options(options, true).map(Self::Tcp),
             #[cfg(any(
@@ -234,6 +247,8 @@ impl Transport {
 #[derive(Debug)]
 pub(crate) enum Stream {
     Unix(Async<UnixStream>),
+    #[cfg(unix)]
+    UnixExec(Command),
     Tcp(Async<TcpStream>),
     #[cfg(feature = "vsock")]
     Vsock(Async<VsockStream>),
@@ -244,6 +259,8 @@ pub(crate) enum Stream {
 pub(crate) enum Stream {
     #[cfg(unix)]
     Unix(tokio::net::UnixStream),
+    #[cfg(unix)]
+    UnixExec(Command),
     Tcp(TcpStream),
     #[cfg(feature = "tokio-vsock")]
     Vsock(VsockStream),
@@ -334,6 +351,8 @@ impl Display for Transport {
         match self {
             Self::Tcp(tcp) => write!(f, "{}", tcp)?,
             Self::Unix(unix) => write!(f, "{}", unix)?,
+            #[cfg(unix)]
+            Self::UnixExec(unix) => write!(f, "{}", unix)?,
             #[cfg(any(
                 all(feature = "vsock", not(feature = "tokio")),
                 feature = "tokio-vsock"
